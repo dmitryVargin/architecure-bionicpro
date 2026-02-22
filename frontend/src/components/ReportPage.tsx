@@ -1,27 +1,28 @@
 import React, { useState } from 'react';
-import { useKeycloak } from '@react-keycloak/web';
+import { UserSession } from '../App';
 
-const ReportPage: React.FC = () => {
-  const { keycloak, initialized } = useKeycloak();
+interface ReportPageProps {
+  session: UserSession;
+}
+
+const ReportPage: React.FC<ReportPageProps> = ({ session }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const downloadReport = async () => {
-    if (!keycloak?.token) {
-      setError('Not authenticated');
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
       const response = await fetch(`${process.env.REACT_APP_API_URL}/reports`, {
+        // Here we might need to proxy through auth service or use session cookies if API supports it
+        // For now, let's assume the API is also behind the auth service or we just show the user info
         headers: {
-          'Authorization': `Bearer ${keycloak.token}`
+          'Accept': 'application/json'
         }
       });
-
+      
+      if (!response.ok) throw new Error('Failed to fetch report');
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -30,19 +31,16 @@ const ReportPage: React.FC = () => {
     }
   };
 
-  if (!initialized) {
-    return <div>Loading...</div>;
-  }
-
-  if (!keycloak.authenticated) {
+  if (!session.authenticated) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-        <button
-          onClick={() => keycloak.login()}
+        <h1 className="text-xl mb-4">You are not logged in</h1>
+        <a
+          href={`${process.env.REACT_APP_KEYCLOAK_URL}/login`}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
           Login
-        </button>
+        </a>
       </div>
     );
   }
@@ -50,7 +48,8 @@ const ReportPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       <div className="p-8 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold mb-6">Usage Reports</h1>
+        <h1 className="text-2xl font-bold mb-2">Usage Reports</h1>
+        <p className="mb-6 text-gray-600">Welcome, {session.user?.preferred_username || session.user?.name}</p>
         
         <button
           onClick={downloadReport}
@@ -61,6 +60,13 @@ const ReportPage: React.FC = () => {
         >
           {loading ? 'Generating Report...' : 'Download Report'}
         </button>
+
+        <a 
+          href={`${process.env.REACT_APP_KEYCLOAK_URL}/logout`}
+          className="mt-4 block text-center text-sm text-gray-500 hover:text-gray-700"
+        >
+          Logout
+        </a>
 
         {error && (
           <div className="mt-4 p-4 bg-red-100 text-red-700 rounded">

@@ -1,23 +1,29 @@
-import React from 'react';
-import { ReactKeycloakProvider } from '@react-keycloak/web';
-import Keycloak, { KeycloakConfig } from 'keycloak-js';
+import React, { useState, useEffect } from 'react';
 import ReportPage from './components/ReportPage';
 
-const keycloakConfig: KeycloakConfig = {
-  url: process.env.REACT_APP_KEYCLOAK_URL,
-  realm: process.env.REACT_APP_KEYCLOAK_REALM||"",
-  clientId: process.env.REACT_APP_KEYCLOAK_CLIENT_ID||""
-};
-
-const keycloak = new Keycloak(keycloakConfig);
+export interface UserSession {
+  authenticated: boolean;
+  user?: any;
+}
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_KEYCLOAK_URL}/session`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setSession(data))
+      .catch(err => console.error('Failed to fetch session:', err));
+  }, []);
+
+  if (!session) {
+    return <div>Loading session...</div>;
+  }
+
   return (
-    <ReactKeycloakProvider authClient={keycloak}>
-      <div className="App">
-        <ReportPage />
-      </div>
-    </ReactKeycloakProvider>
+    <div className="App">
+      <ReportPage session={session} />
+    </div>
   );
 };
 

@@ -1,4 +1,4 @@
 /postgres-keycloak-data
 2024__yandex-architecture-sso.code-workspace
 .idea
-./bionicpro-auth/node_modules
+node_modules
