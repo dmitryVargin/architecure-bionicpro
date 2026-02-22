@@ -42,7 +42,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'some-very-secret-key',
     cookie: {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000
     }
 }));
@@ -70,6 +70,55 @@ async function initOidc() {
 }
 
 initOidc();
+
+const refreshAndRotate = async (req, res, next) => {
+    if (!req.session.user || !req.session.tokens) {
+        return next();
+    }
+
+    try {
+        let tokens = req.session.tokens;
+        const now = Math.floor(Date.now() / 1000);
+
+        // 1. Refresh token if expired or expiring within 60s
+        if (tokens.expires_at && tokens.expires_at < now + 60) {
+            console.log('Access token expiring, refreshing...');
+            try {
+                const newTokenSet = await oidc.refreshTokenGrant(config, tokens.refresh_token);
+                newTokenSet.expires_at = Math.floor(Date.now() / 1000) + (newTokenSet.expires_in || 0);
+                req.session.tokens = newTokenSet;
+                tokens = newTokenSet;
+                console.log('Token refreshed successfully');
+            } catch (err) {
+                console.error('Refresh token failed:', err.message);
+                req.session.destroy();
+                return res.status(401).json({ authenticated: false, error: 'Session expired' });
+            }
+        }
+
+        // 2. Session rotation
+        const sessionData = { ...req.session };
+        delete sessionData.cookie;
+
+        req.session.regenerate((err) => {
+            if (err) {
+                console.error('Session regeneration failed:', err);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+            Object.assign(req.session, sessionData);
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save failed:', err);
+                    return res.status(500).json({ error: 'Internal server error' });
+                }
+                next();
+            });
+        });
+    } catch (err) {
+        console.error('refreshAndRotate middleware error:', err);
+        next(err);
+    }
+};
 
 app.get('/healthcheck', (req, res) => {
     res.send('Auth server is running. <a href="/login">Login</a>');
@@ -109,6 +158,9 @@ app.get('/callback', async (req, res) => {
 
         const userinfo = await oidc.fetchUserInfo(config, tokenSet.access_token, oidc.skipSubjectCheck);
         
+        // Store expiration timestamp
+        tokenSet.expires_at = Math.floor(Date.now() / 1000) + (tokenSet.expires_in || 0);
+
         req.session.user = userinfo;
         req.session.tokens = tokenSet;
         
@@ -119,22 +171,24 @@ app.get('/callback', async (req, res) => {
     }
 });
 
-app.get('/session', (req, res) => {
+app.get('/session', refreshAndRotate, (req, res) => {
     if (!req.session.user) {
         return res.json({ authenticated: false });
     }
     res.json({
         authenticated: true,
-        user: req.session.user
+        user: req.session.user,
+        sessionId: req.sessionID
     });
 });
 
-app.get('/me', (req, res) => {
+app.get('/me', refreshAndRotate, (req, res) => {
     if (!req.session.user) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     res.json({
         user: req.session.user,
+        sessionId: req.sessionID,
         message: "This data is retrieved from Keycloak, which can be integrated with OpenLDAP."
     });
 });

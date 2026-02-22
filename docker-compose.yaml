@@ -57,6 +57,8 @@ services:
       LDAP_ORGANISATION: "BionicPRO"
       LDAP_DOMAIN: "bionicpro.com"
       LDAP_ADMIN_PASSWORD: "admin"
+    volumes:
+      - ./ldap/config.ldif:/tmp/data.ldif
     ports:
       - "389:389"
 

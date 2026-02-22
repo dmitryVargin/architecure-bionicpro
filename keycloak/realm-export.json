@@ -125,5 +125,62 @@
         "secret": "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq", 
         "bearerOnly": true
       }
-    ]
-  }
+    ],
+    "components": {
+        "org.keycloak.storage.UserStorageProvider": [
+            {
+                "name": "ldap-bionicpro",
+                "providerId": "ldap",
+                "subComponents": {
+                    "org.keycloak.storage.ldap.mappers.LDAPStorageMapper": [
+                        {
+                            "name": "role-mapper",
+                            "providerId": "role-ldap-mapper",
+                            "config": {
+                                "roles.dn": ["ou=Groups,dc=bionicpro,dc=com"],
+                                "role.name.ldap.attribute": ["cn"],
+                                "role.object.classes": ["groupOfNames"],
+                                "membership.ldap.attribute": ["member"],
+                                "membership.attribute.type": ["DN"],
+                                "user.roles.retrieve.strategy": ["LOAD_ROLES_BY_MEMBER_ATTRIBUTE"],
+                                "mode": ["READ_ONLY"],
+                                "use.realm.roles.mapping": ["true"]
+                            }
+                        },
+                        {
+                            "name": "username-mapper",
+                            "providerId": "user-attribute-ldap-mapper",
+                            "config": {
+                                "ldap.attribute": ["uid"],
+                                "is.mandatory.in.ldap": ["true"],
+                                "always.read.from.ldap": ["true"],
+                                "user.model.attribute": ["username"],
+                                "read.only": ["true"]
+                            }
+                        }
+                    ]
+                },
+                "config": {
+                    "enabled": ["true"],
+                    "priority": ["0"],
+                    "vendor": ["other"],
+                    "useTruststoreSpi": ["never"],
+                    "connectionUrl": ["ldap://openldap:389"],
+                    "bindDn": ["cn=admin,dc=bionicpro,dc=com"],
+                    "bindCredential": ["admin"],
+                    "usersDn": ["ou=People,dc=bionicpro,dc=com"],
+                    "usernameLDAPAttribute": ["uid"],
+                    "rdnLDAPAttribute": ["uid"],
+                    "uuidLDAPAttribute": ["uid"],
+                    "userObjectClasses": ["inetOrgPerson"],
+                    "importEnabled": ["true"],
+                    "editMode": ["READ_ONLY"],
+                    "syncRegistrations": ["false"],
+                    "authType": ["simple"],
+                    "searchScope": ["1"],
+                    "usePasswordModifyExtendedOp": ["false"]
+                }
+            }
+        ]
+    }
+}
