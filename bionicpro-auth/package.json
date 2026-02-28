@@ -17,6 +17,7 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "ioredis": "^5.9.3",
-    "openid-client": "^6.8.2"
+    "openid-client": "^6.8.2",
+    "pg": "^8.19.0"
   }
 }

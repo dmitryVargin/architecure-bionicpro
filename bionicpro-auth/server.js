@@ -5,6 +5,16 @@ import * as oidc from 'openid-client';
 import dotenv from 'dotenv';
 import {RedisStore} from "connect-redis";
 import cors from 'cors';
+import {Pool} from "pg";
+
+
+const pool = new Pool({
+    host: 'crm-telemetry-postgres', // имя из docker-compose
+    port: 5432,
+    database: 'crm_telemetry_db',
+    user: 'crm_user',
+    password: 'crm_password',
+});
 
 const myFetch = (url, options) => {
     const urlString = url.toString();
@@ -161,7 +171,16 @@ app.get('/callback', async (req, res) => {
         });
 
         const userinfo = await oidc.fetchUserInfo(config, tokenSet.access_token, oidc.skipSubjectCheck);
-        
+
+        await pool.query(
+            `INSERT INTO customers (external_id, first_name, email) 
+                VALUES ($1, $2, $3) 
+                ON CONFLICT (external_id) DO UPDATE 
+                SET first_name = $2, email = $3`,
+            [userinfo.sub, userinfo.given_name || userinfo.preferred_username, userinfo.email]
+        );
+
+
         // Store expiration timestamp
         tokenSet.expires_at = Math.floor(Date.now() / 1000) + (tokenSet.expires_in || 0);
 
