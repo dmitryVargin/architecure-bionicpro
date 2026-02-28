@@ -182,5 +182,204 @@
                 }
             }
         ]
+    },
+    "authenticationFlows": [
+        {
+            "alias": "first-broker-login-with-otp",
+            "description": "First broker login with mandatory OTP",
+            "providerId": "basic-flow",
+            "topLevel": true,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "idp-review-profile",
+                    "requirement": "DISABLED",
+                    "priority": 10,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "idp-create-user-if-unique",
+                    "requirement": "REQUIRED",
+                    "priority": 20,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                }
+            ]
+        },
+        {
+            "alias": "browser-with-otp",
+            "description": "Browser flow with mandatory OTP",
+            "providerId": "basic-flow",
+            "topLevel": true,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "auth-cookie",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 10,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "auth-spnego",
+                    "requirement": "DISABLED",
+                    "priority": 20,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "identity-provider-redirector",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 25,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "requirement": "ALTERNATIVE",
+                    "priority": 30,
+                    "flowAlias": "forms",
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": true
+                }
+            ]
+        },
+        {
+            "alias": "forms",
+            "description": "Username, password, and OTP forms",
+            "providerId": "basic-flow",
+            "topLevel": false,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "auth-username-password-form",
+                    "requirement": "REQUIRED",
+                    "priority": 10,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "auth-otp-form",
+                    "requirement": "REQUIRED",
+                    "priority": 20,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                }
+            ]
+        },
+        {
+            "alias": "direct-grant-with-otp",
+            "description": "Direct grant flow with OTP",
+            "providerId": "basic-flow",
+            "topLevel": true,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "direct-grant-validate-username",
+                    "requirement": "REQUIRED",
+                    "priority": 10,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "direct-grant-validate-password",
+                    "requirement": "REQUIRED",
+                    "priority": 20,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                },
+                {
+                    "authenticator": "direct-grant-validate-otp",
+                    "requirement": "REQUIRED",
+                    "priority": 30,
+                    "userSetupAllowed": false,
+                    "authenticatorFlow": false
+                }
+            ]
+        }
+    ],
+    "browserFlow": "browser-with-otp",
+    "directGrantFlow": "direct-grant-with-otp",
+    "accessTokenLifespan": 300,
+    "ssoSessionIdleTimeout": 1800,
+    "ssoSessionMaxLifespan": 36000,
+    "attributes": {
+        "frontend_url": "http://localhost:8080",
+        "par.request.uri.lifespan": "60",
+        "acr.loa.map": "{}"
+    },
+    "requiredActions": [
+        {
+            "alias": "CONFIGURE_TOTP",
+            "name": "Configure OTP",
+            "providerId": "CONFIGURE_TOTP",
+            "enabled": true,
+            "defaultAction": true
+        }
+    ],
+  "identityProviderMappers": [
+    {
+      "name": "yandex-email",
+      "identityProviderAlias": "yandex",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "claim": "default_email",
+        "user.attribute": "email"
+      }
+    },
+    {
+      "name": "yandex-first-name",
+      "identityProviderAlias": "yandex",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "claim": "first_name",
+        "user.attribute": "firstName"
+      }
+    },
+    {
+      "name": "yandex-last-name",
+      "identityProviderAlias": "yandex",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "claim": "last_name",
+        "user.attribute": "lastName"
+      }
+    },
+    {
+      "name": "yandex-login-attr",
+      "identityProviderAlias": "yandex",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "claim": "login",
+        "user.attribute": "yandex_login"
+      }
+    },
+    {
+      "name": "yandex-id-attr",
+      "identityProviderAlias": "yandex",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "claim": "id",
+        "user.attribute": "yandex_id"
+      }
     }
+  ],
+  "identityProviders": [
+    {
+      "alias": "yandex",
+      "displayName": "Yandex ID",
+      "providerId": "yandex",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "config": {
+        "clientId": "1473309b844747baa6100dd7bf837615",
+        "clientSecret": "72df355329504d5d8099e9c08d5af996",
+        "syncMode": "IMPORT",
+        "storeToken": "false",
+        "acceptMessages": "false"
+      }
+    }
+  ]
 }

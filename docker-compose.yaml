@@ -12,7 +12,9 @@ services:
     ports:
       - "5433:5432"
   keycloak:
-    image: quay.io/keycloak/keycloak:21.1
+    image: playaru/keycloak-russian:latest
+    platform: linux/amd64
+    restart: unless-stopped
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -23,15 +25,22 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_LOG_LEVEL: info
-      KC_HOSTNAME_URL: http://localhost:8080
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME: localhost
+      KC_PROXY: none
     command: 
       - start-dev
       - --import-realm
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./providers:/opt/keycloak/providers
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; cat <&3 | grep -q \"200 OK\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     depends_on:
       - keycloak_db
   frontend:
@@ -53,12 +62,15 @@ services:
 
   openldap:
     image: osixia/openldap:1.5.0
+    platform: linux/amd64
     environment:
       LDAP_ORGANISATION: "BionicPRO"
       LDAP_DOMAIN: "bionicpro.com"
       LDAP_ADMIN_PASSWORD: "admin"
     volumes:
       - ./ldap/config.ldif:/tmp/data.ldif
+      - openldap_data:/var/lib/ldap
+      - openldap_config:/etc/ldap/slapd.d
     ports:
       - "389:389"
 
@@ -66,6 +78,7 @@ services:
     build:
       context: ./bionicpro-auth
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
@@ -76,6 +89,13 @@ services:
       - REDIRECT_URI=http://localhost:3001/callback
       - SESSION_SECRET=super-secret-session-key
     depends_on:
-      - keycloak
-      - redis
-      - openldap
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      openldap:
+        condition: service_started
+
+volumes:
+  openldap_data:
+  openldap_config:

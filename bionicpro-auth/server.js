@@ -7,7 +7,8 @@ import {RedisStore} from "connect-redis";
 import cors from 'cors';
 
 const myFetch = (url, options) => {
-    const u = new URL(url);
+    const urlString = url.toString();
+    const u = new URL(urlString);
     if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
         if (u.port === '8080') {
             u.hostname = 'keycloak';
@@ -51,7 +52,9 @@ let config;
 
 async function initOidc() {
     try {
-        const issuer = new URL(process.env.KEYCLOAK_ISSUER || 'http://localhost:8080/realms/reports-realm');
+        const issuerUrl = process.env.KEYCLOAK_ISSUER || 'http://localhost:8080/realms/reports-realm';
+        console.log(`Discovering OIDC configuration for issuer: ${issuerUrl}...`);
+        const issuer = new URL(issuerUrl);
         config = await oidc.discovery(
             issuer,
             process.env.CLIENT_ID || 'reports-frontend',
@@ -64,7 +67,8 @@ async function initOidc() {
         );
         console.log('OIDC configuration discovered successfully');
     } catch (err) {
-        console.error('Failed to discover OIDC configuration, retrying in 5 seconds...', err.message);
+        console.error('Failed to discover OIDC configuration:', err);
+        console.log('Retrying in 5 seconds...');
         setTimeout(initOidc, 5000);
     }
 }
