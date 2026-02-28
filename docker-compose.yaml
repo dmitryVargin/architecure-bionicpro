@@ -5,6 +5,7 @@ x-airflow-common: &airflow-common
     context: ./airflow
     dockerfile: Dockerfile
   environment: &airflow-common-env
+    AIRFLOW__CORE__TEST_CONNECTION: 'Enabled'
     AIRFLOW__CORE__EXECUTOR: LocalExecutor #локальный запуск
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -16,6 +17,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__SECRET_KEY: 'your_airflow_webserver_sec_key'
     _PIP_ADDITIONAL_REQUIREMENTS: ''
     AIRFLOW_INPUT_DIR: '/opt/airflow/dag-inputs'
+    AIRFLOW_CONN_POSTGRES_SOURCE: 'postgresql://crm_user:crm_password@crm-telemetry-postgres:5432/crm_telemetry_db'
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/dags/sql:/opt/airflow/dags/sql
@@ -234,6 +236,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIRECT_URI=http://localhost:3001/callback
       - SESSION_SECRET=super-secret-session-key
+    networks:
+      - default
+      - dag_sample
     depends_on:
       - keycloak
       - redis
@@ -251,6 +256,8 @@ services:
       - ./postgres/init:/docker-entrypoint-initdb.d
     ports:
       - "5434:5432"
+    networks:
+      - dag_sample
 
 volumes:
   openldap_data:

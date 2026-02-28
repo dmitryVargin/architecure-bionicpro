@@ -6,7 +6,15 @@ import dotenv from 'dotenv';
 import {RedisStore} from "connect-redis";
 import cors from 'cors';
 import {Pool} from "pg";
+import {createClient as createClickHouseClient} from "@clickhouse/client";
 
+
+const chClient = createClickHouseClient({
+    url: 'http://bionicpro-clickhouse:8123',
+    username: 'reports_user',
+    password: 'reports_password',
+    database: 'reports',
+});
 
 const pool = new Pool({
     host: 'crm-telemetry-postgres', // имя из docker-compose
@@ -219,6 +227,50 @@ app.get('/me', refreshAndRotate, (req, res) => {
 app.get('/logout', (req, res) => {
     req.session.destroy();
     res.send('Logged out successfully');
+});
+
+app.get('/reports', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const externalId = req.session.user.sub;
+
+    try {
+        const result = await chClient.query({
+            query: `
+                SELECT
+                    c.first_name,
+                    c.email,
+                    count(t.signal_value)      AS total_measurements,
+                    avg(t.signal_value)        AS avg_signal,
+                    min(t.signal_value)        AS min_signal,
+                    max(t.signal_value)        AS max_signal,
+                    min(t.timestamp)           AS first_record,
+                    max(t.timestamp)           AS last_record
+                FROM reports.telemetry t
+                JOIN reports.customers c ON t.customer_id = c.id
+                WHERE c.external_id = {externalId: String}
+                GROUP BY c.first_name, c.email
+            `,
+            query_params: { externalId },
+            format: 'JSONEachRow',
+        });
+
+        const data = await result.json();
+
+        if (data.length === 0) {
+            return res.json({
+                message: 'No report data yet. Data is processed hourly by Airflow.',
+                data: [],
+            });
+        }
+
+        res.json({ data });
+    } catch (err) {
+        console.error('Report query error:', err);
+        res.status(500).json({ error: 'Failed to fetch report' });
+    }
 });
 
 app.listen(port, () => {
