@@ -13,7 +13,6 @@ services:
       - "5433:5432"
   keycloak:
     image: playaru/keycloak-russian:latest
-    platform: linux/amd64
     restart: unless-stopped
     environment:
       KEYCLOAK_ADMIN: admin
@@ -33,7 +32,6 @@ services:
       - --import-realm
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
-      - ./providers:/opt/keycloak/providers
     ports:
       - "8080:8080"
     healthcheck:
@@ -62,7 +60,6 @@ services:
 
   openldap:
     image: osixia/openldap:1.5.0
-    platform: linux/amd64
     environment:
       LDAP_ORGANISATION: "BionicPRO"
       LDAP_DOMAIN: "bionicpro.com"
@@ -78,7 +75,6 @@ services:
     build:
       context: ./bionicpro-auth
       dockerfile: Dockerfile
-    restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
@@ -89,12 +85,9 @@ services:
       - REDIRECT_URI=http://localhost:3001/callback
       - SESSION_SECRET=super-secret-session-key
     depends_on:
-      keycloak:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      openldap:
-        condition: service_started
+      - keycloak
+      - redis
+      - openldap
 
 volumes:
   openldap_data:
