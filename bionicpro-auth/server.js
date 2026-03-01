@@ -264,19 +264,11 @@ app.get('/reports', async (req, res) => {
     try {
         const result = await chClient.query({
             query: `
-                SELECT
-                    c.first_name,
-                    c.email,
-                    count(t.signal_value)      AS total_measurements,
-                    avg(t.signal_value)        AS avg_signal,
-                    min(t.signal_value)        AS min_signal,
-                    max(t.signal_value)        AS max_signal,
-                    min(t.timestamp)           AS first_record,
-                    max(t.timestamp)           AS last_record
-                FROM reports.telemetry t
-                JOIN reports.customers c ON t.customer_id = c.id
-                WHERE c.external_id = {externalId: String}
-                GROUP BY c.first_name, c.email
+                SELECT first_name, email, total_measurements,
+                       avg_signal, min_signal, max_signal,
+                       first_record, last_record
+                FROM reports.report_vitrina
+                WHERE external_id = {externalId: String}
             `,
             query_params: { externalId },
             format: 'JSONEachRow',

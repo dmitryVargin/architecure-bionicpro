@@ -257,10 +257,100 @@ services:
       - POSTGRES_DB=crm_telemetry_db
       - POSTGRES_USER=crm_user
       - POSTGRES_PASSWORD=crm_password
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=4
+      - -c
+      - max_wal_senders=4
     volumes:
       - ./postgres/init:/docker-entrypoint-initdb.d
     ports:
       - "5434:5432"
+    networks:
+      - dag_sample
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: bionicpro-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - dag_sample
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: bionicpro-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - dag_sample
+
+  kafka-connect:
+    image: debezium/connect:2.5
+    container_name: bionicpro-kafka-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: debezium_configs
+      OFFSET_STORAGE_TOPIC: debezium_offsets
+      STATUS_STORAGE_TOPIC: debezium_statuses
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - dag_sample
+
+  debezium-init:
+    image: curlimages/curl:latest
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    command: >
+      -X POST http://kafka-connect:8083/connectors
+      -H "Content-Type: application/json"
+      -d '{
+        "name": "bionicpro-postgres-connector",
+        "config": {
+          "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+          "database.hostname": "crm-telemetry-postgres",
+          "database.port": "5432",
+          "database.user": "crm_user",
+          "database.password": "crm_password",
+          "database.dbname": "crm_telemetry_db",
+          "topic.prefix": "bionicpro",
+          "table.include.list": "public.customers,public.telemetry",
+          "plugin.name": "pgoutput",
+          "transforms": "unwrap",
+          "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+          "transforms.unwrap.drop.tombstones": "true",
+          "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+          "key.converter.schemas.enable": "false",
+          "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+          "value.converter.schemas.enable": "false"
+        }
+      }'
     networks:
       - dag_sample
 
