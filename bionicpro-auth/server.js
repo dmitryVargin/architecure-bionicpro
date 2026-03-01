@@ -7,6 +7,7 @@ import {RedisStore} from "connect-redis";
 import cors from 'cors';
 import {Pool} from "pg";
 import {createClient as createClickHouseClient} from "@clickhouse/client";
+import {S3Client, HeadObjectCommand, PutObjectCommand} from "@aws-sdk/client-s3";
 
 
 const chClient = createClickHouseClient({
@@ -16,8 +17,19 @@ const chClient = createClickHouseClient({
     database: 'reports',
 });
 
+const s3Client = new S3Client({
+    endpoint: process.env.MINIO_ENDPOINT || 'http://minio:9000',
+    region: 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+        secretAccessKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
+    },
+    forcePathStyle: true,
+});
+const S3_BUCKET = 'bionicpro-reports';
+
 const pool = new Pool({
-    host: 'crm-telemetry-postgres', // имя из docker-compose
+    host: 'crm-telemetry-postgres',
     port: 5432,
     database: 'crm_telemetry_db',
     user: 'crm_user',
@@ -102,7 +114,6 @@ const refreshAndRotate = async (req, res, next) => {
         let tokens = req.session.tokens;
         const now = Math.floor(Date.now() / 1000);
 
-        // 1. Refresh token if expired or expiring within 60s
         if (tokens.expires_at && tokens.expires_at < now + 60) {
             console.log('Access token expiring, refreshing...');
             try {
@@ -118,7 +129,6 @@ const refreshAndRotate = async (req, res, next) => {
             }
         }
 
-        // 2. Session rotation
         const sessionData = { ...req.session };
         delete sessionData.cookie;
 
@@ -166,11 +176,11 @@ app.get('/login', async (req, res) => {
 
 app.get('/callback', async (req, res) => {
     if (!config) return res.status(503).send('Auth service is initializing');
-    
+
     try {
         const redirect_uri = process.env.REDIRECT_URI || `http://localhost:${port}/callback`;
         const currentUrl = new URL(req.url, redirect_uri);
-        
+
         console.log('Callback received. URL:', currentUrl.href);
         console.log('Using code_verifier from session:', req.session.code_verifier ? 'present' : 'missing');
 
@@ -181,20 +191,18 @@ app.get('/callback', async (req, res) => {
         const userinfo = await oidc.fetchUserInfo(config, tokenSet.access_token, oidc.skipSubjectCheck);
 
         await pool.query(
-            `INSERT INTO customers (external_id, first_name, email) 
-                VALUES ($1, $2, $3) 
-                ON CONFLICT (external_id) DO UPDATE 
+            `INSERT INTO customers (external_id, first_name, email)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (external_id) DO UPDATE
                 SET first_name = $2, email = $3`,
             [userinfo.sub, userinfo.given_name || userinfo.preferred_username, userinfo.email]
         );
 
-
-        // Store expiration timestamp
         tokenSet.expires_at = Math.floor(Date.now() / 1000) + (tokenSet.expires_in || 0);
 
         req.session.user = userinfo;
         req.session.tokens = tokenSet;
-        
+
         res.redirect('http://localhost:3000');
     } catch (err) {
         console.error('Authentication error:', err);
@@ -235,6 +243,23 @@ app.get('/reports', async (req, res) => {
     }
 
     const externalId = req.session.user.sub;
+    const s3Key = `${externalId}/report.json`;
+    const cdnBase = process.env.CDN_URL || 'http://localhost:8090';
+    const cdnUrl = `${cdnBase}/reports/${s3Key}`;
+
+    try {
+        const head = await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: s3Key }));
+        const lastEtlRun = await redisClient.get('etl:last_run');
+        const etlTime = lastEtlRun ? new Date(parseInt(lastEtlRun)) : null;
+
+        if (!etlTime || head.LastModified > etlTime) {
+            console.log(`Report cache hit for user ${externalId}`);
+            return res.json({ cdnUrl, cached: true });
+        }
+        console.log(`Report cache stale for user ${externalId}, regenerating...`);
+    } catch (_) {
+        console.log(`Report not found in S3 for user ${externalId}, generating...`);
+    }
 
     try {
         const result = await chClient.query({
@@ -266,7 +291,15 @@ app.get('/reports', async (req, res) => {
             });
         }
 
-        res.json({ data });
+        await s3Client.send(new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: s3Key,
+            Body: JSON.stringify({ data }),
+            ContentType: 'application/json',
+        }));
+
+        console.log(`Report saved to S3 for user ${externalId}`);
+        res.json({ cdnUrl, cached: false });
     } catch (err) {
         console.error('Report query error:', err);
         res.status(500).json({ error: 'Failed to fetch report' });

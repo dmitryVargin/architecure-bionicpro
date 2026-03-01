@@ -3,17 +3,15 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from clickhouse_driver import Client
 from datetime import datetime, timedelta
+import redis as redis_lib
+import time
 
 def run_etl():
     pg_hook = PostgresHook(postgres_conn_id='postgres_source')
 
-    # Extract
     customers_data = pg_hook.get_records("SELECT id, external_id, first_name, email FROM customers")
     telemetry_data = pg_hook.get_records("SELECT customer_id, signal_value, timestamp FROM telemetry")
 
-    # Transform
-
-    # Load
     ch_client = Client(
         host='bionicpro-clickhouse',
         port=9000,
@@ -33,6 +31,12 @@ def run_etl():
             'INSERT INTO reports.telemetry (customer_id, signal_value, timestamp) VALUES',
             telemetry_data
         )
+
+
+def invalidate_report_cache():
+    r = redis_lib.Redis(host='redis', port=6379)
+    r.set('etl:last_run', int(time.time() * 1000))
+
 
 default_args = {
     'owner': 'airflow',
@@ -54,3 +58,10 @@ with DAG(
         task_id='transfer_data',
         python_callable=run_etl
     )
+
+    invalidate_task = PythonOperator(
+        task_id='invalidate_cache',
+        python_callable=invalidate_report_cache
+    )
+
+    etl_task >> invalidate_task

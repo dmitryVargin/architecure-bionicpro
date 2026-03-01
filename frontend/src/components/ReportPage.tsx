@@ -21,6 +21,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ session }) => {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ReportData[] | null>(null);
   const [noData, setNoData] = useState<string | null>(null);
+  const [cached, setCached] = useState<boolean | null>(null);
 
   const fetchReport = async () => {
     try {
@@ -28,6 +29,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ session }) => {
       setError(null);
       setNoData(null);
       setReport(null);
+      setCached(null);
 
       const response = await fetch(`${process.env.REACT_APP_KEYCLOAK_URL}/reports`, {
         credentials: 'include',
@@ -42,11 +44,17 @@ const ReportPage: React.FC<ReportPageProps> = ({ session }) => {
 
       const json = await response.json();
 
-      if (json.data.length === 0) {
+      if (json.message) {
         setNoData(json.message);
-      } else {
-        setReport(json.data);
+        return;
       }
+
+      const cdnResponse = await fetch(json.cdnUrl);
+      if (!cdnResponse.ok) throw new Error('Failed to fetch report from CDN');
+
+      const reportJson = await cdnResponse.json();
+      setReport(reportJson.data);
+      setCached(json.cached);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -99,6 +107,12 @@ const ReportPage: React.FC<ReportPageProps> = ({ session }) => {
 
         {noData && (
           <div className="mt-4 p-4 bg-yellow-50 text-yellow-800 rounded">{noData}</div>
+        )}
+
+        {cached !== null && (
+          <div className={`mt-4 p-2 text-xs rounded ${cached ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+            {cached ? '✓ Served from cache (CDN)' : '↻ Freshly generated and cached'}
+          </div>
         )}
 
         {report && report.map((row, i) => (
