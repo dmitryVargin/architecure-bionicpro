@@ -1898,7 +1898,7 @@
             "cn=admin,dc=bionicpro,dc=com"
           ],
           "bindCredential": [
-            "**********"
+            "admin"
           ],
           "usernameLDAPAttribute": [
             "uid"
