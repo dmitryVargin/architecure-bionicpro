@@ -217,7 +217,7 @@ services:
       LDAP_DOMAIN: "bionicpro.com"
       LDAP_ADMIN_PASSWORD: "admin"
     volumes:
-      - ./ldap/config.ldif:/tmp/data.ldif
+      - ./ldap/config.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/config.ldif
       - openldap_data:/var/lib/ldap
       - openldap_config:/etc/ldap/slapd.d
     ports:
