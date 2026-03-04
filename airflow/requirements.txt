@@ -1,0 +1,4 @@
+psycopg2-binary
+clickhouse-driver
+apache-airflow-providers-postgres
+redis
